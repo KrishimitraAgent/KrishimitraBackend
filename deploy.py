@@ -28,12 +28,16 @@ remote_agent = agent_engines.create(
         "google-adk",
         "fastapi",
         "uvicorn",
-        "vertexai"
+        "vertexai",
+        "google-cloud-firestore",
+        "google-cloud-storage"
     ],
     extra_packages = [
         "coordinator_agent", 
         "cropprice_agent", 
-        "greetor"
+        "greetor",
+        "crop_doctor",
+        "farmer_mood"
     ],
     gcs_dir_name = None,
     display_name="Farming Coordinator Agent",

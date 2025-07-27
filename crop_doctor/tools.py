@@ -1,6 +1,9 @@
 import hashlib
 from typing import Dict
 from google.cloud import firestore
+from dotenv import load_dotenv
+
+load_dotenv()
 
 db = firestore.Client()
 

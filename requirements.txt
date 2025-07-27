@@ -8,3 +8,4 @@ pydantic
 google-auth
 pandas
 openpyxl
+google-cloud-storage

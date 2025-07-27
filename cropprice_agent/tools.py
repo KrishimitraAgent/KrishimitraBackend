@@ -2,6 +2,8 @@ from pydantic import BaseModel
 import requests
 import pandas as pd
 import os
+from google.cloud import storage
+import io
 
 
 class CropPriceFilters(BaseModel):
@@ -84,7 +86,8 @@ def call_price_api(filters: CropPriceFilters):
 
 def call_price_api_data(filters: CropPriceFilters):
     """
-    Read crop price data from a local CSV file and apply filters.
+    Read crop price data from a CSV/Excel file in Google Cloud Storage and apply filters.
+    If cloud storage access fails, fallback to API call.
     
     Args:
         filters: An instance of CropPriceFilters containing the desired filter values.
@@ -92,19 +95,39 @@ def call_price_api_data(filters: CropPriceFilters):
     Returns:
         A list of dictionaries representing the filtered crop price data.
     """
+    bucket_name="crop_price"
+    file_name="crop_price.csv"
+    print("inside call_price_api_data")
     if isinstance(filters, dict):
         filters = CropPriceFilters(**filters)
     
-    csv_file_path = r"C:\Users\ASUS\Downloads\crop_price.csv"
-    # Check if CSV file exists
-    if not os.path.exists(csv_file_path):
-        print(f"CSV file not found: {csv_file_path}")
-        return []
-    
     try:
-        # Read the CSV file
-        print(f"Reading CSV file: {csv_file_path}")
-        df = pd.read_csv(csv_file_path)
+        # Initialize Google Cloud Storage client
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(file_name)
+        
+        # Check if file exists in bucket
+        if not blob.exists():
+            print(f"File not found in bucket: {bucket_name}/{file_name}")
+            print("Falling back to API call...")
+            return call_price_api(filters)
+        
+        # Download file content as bytes
+        print(f"Reading file from GCS bucket: {bucket_name}/{file_name}")
+        file_content = blob.download_as_bytes()
+        
+        # Read file based on extension
+        file_extension = file_name.lower().split('.')[-1]
+        
+        if file_extension == 'csv':
+            df = pd.read_csv(io.BytesIO(file_content))
+        elif file_extension in ['xlsx', 'xls']:
+            df = pd.read_excel(io.BytesIO(file_content))
+        else:
+            print(f"Unsupported file format: {file_extension}. Supported formats: csv, xlsx, xls")
+            print("Falling back to API call...")
+            return call_price_api(filters)
         
         # Apply filters
         filtered_df = df.copy()
@@ -147,12 +170,13 @@ def call_price_api_data(filters: CropPriceFilters):
         # Convert to list of dictionaries
         result = filtered_df.to_dict('records')
         
-        print(f"Found {len(result)} records out of {total_records} total filtered records")
+        print(f"Found {len(result)} records out of {total_records} total filtered records from cloud storage")
         print(f"Sample of filtered data: {result[:2] if result else 'No data found'}")
         
         return result
         
     except Exception as e:
-        print(f"Error reading CSV file: {e}")
-        return []
-    
+        print(f"Error reading file from cloud bucket: {e}")
+        print("Falling back to API call...")
+        return call_price_api(filters)
+        
