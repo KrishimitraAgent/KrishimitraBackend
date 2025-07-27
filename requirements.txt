@@ -1,2 +1,10 @@
+google-cloud-aiplatform[agent_engines,adk]
 google-adk
 fastapi
+uvicorn
+vertexai
+requests
+pydantic
+google-auth
+pandas
+openpyxl

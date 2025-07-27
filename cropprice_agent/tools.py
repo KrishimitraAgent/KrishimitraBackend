@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 import requests
+import pandas as pd
+import os
 
 
 class CropPriceFilters(BaseModel):
@@ -10,6 +12,7 @@ class CropPriceFilters(BaseModel):
     grade: str = None
     offset: int = None
     limit: int = None
+
 
 
 def call_price_api(filters: CropPriceFilters):
@@ -77,3 +80,79 @@ def call_price_api(filters: CropPriceFilters):
             print(f"Failed to decode JSON from response. Response text: {response.text}")
     else:
         return base_url
+
+
+def call_price_api_data(filters: CropPriceFilters):
+    """
+    Read crop price data from a local CSV file and apply filters.
+    
+    Args:
+        filters: An instance of CropPriceFilters containing the desired filter values.
+    
+    Returns:
+        A list of dictionaries representing the filtered crop price data.
+    """
+    if isinstance(filters, dict):
+        filters = CropPriceFilters(**filters)
+    
+    csv_file_path = r"C:\Users\ASUS\Downloads\crop_price.csv"
+    # Check if CSV file exists
+    if not os.path.exists(csv_file_path):
+        print(f"CSV file not found: {csv_file_path}")
+        return []
+    
+    try:
+        # Read the CSV file
+        print(f"Reading CSV file: {csv_file_path}")
+        df = pd.read_csv(csv_file_path)
+        
+        # Apply filters
+        filtered_df = df.copy()
+        
+        # Get the filter values, excluding None values
+        filter_dict = filters.model_dump(exclude_none=True)
+        
+        if filter_dict:
+            print(f"Applying filters: {filter_dict}")
+            
+            # Apply each filter
+            for field_name, field_value in filter_dict.items():
+                if field_name in ['offset', 'limit']:
+                    continue  # Handle these separately
+                
+                if field_name in filtered_df.columns:
+                    # Case-insensitive filtering for string columns
+                    if filtered_df[field_name].dtype == 'object':
+                        filtered_df = filtered_df[
+                            filtered_df[field_name].str.contains(
+                                str(field_value), 
+                                case=False, 
+                                na=False
+                            )
+                        ]
+                    else:
+                        filtered_df = filtered_df[filtered_df[field_name] == field_value]
+                else:
+                    print(f"Warning: Column '{field_name}' not found in Excel data")
+        
+        # Handle offset and limit for pagination
+        total_records = len(filtered_df)
+        
+        if filters.offset is not None:
+            filtered_df = filtered_df.iloc[filters.offset:]
+        
+        if filters.limit is not None:
+            filtered_df = filtered_df.head(filters.limit)
+        
+        # Convert to list of dictionaries
+        result = filtered_df.to_dict('records')
+        
+        print(f"Found {len(result)} records out of {total_records} total filtered records")
+        print(f"Sample of filtered data: {result[:2] if result else 'No data found'}")
+        
+        return result
+        
+    except Exception as e:
+        print(f"Error reading CSV file: {e}")
+        return []
+    
